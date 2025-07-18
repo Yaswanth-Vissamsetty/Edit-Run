@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EditRun</title>
+
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
+
+    <style>
+        body {
+            font-family: 'Consolas', 'Fira Code', 'Cascadia Code', monospace; /* Monospaced font for code */
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Full viewport height */
+            overflow: hidden; /* Prevent body scrollbar */
+            background-color: #1a1a1a; /* Very dark background */
+            color: #d4d4d4; /* Light text */
+        }
+
+        h1 {
+            text-align: center;
+            color: #61afef; /* Blueish header color (Prism token color) */
+            padding: 15px 0;
+            margin: 0;
+            background-color: #282c34; /* Header background (Prism-like) */
+            border-bottom: 1px solid #3e4451; /* Border color */
+            font-size: 1.8em;
+            letter-spacing: 0.05em;
+            user-select: none; /* Prevent text selection */
+        }
+
+        .container {
+            display: flex;
+            flex: 1; /* Take remaining vertical space */
+            overflow: hidden; /* Hide scrollbars of the container itself */
+        }
+
+        .code-panel, .output-panel {
+            display: flex;
+            flex-direction: column;
+            min-width: 100px; /* Minimum width for each panel */
+            max-width: 90%; /* Max width to prevent one panel from taking everything */
+            background-color: #282c34; /* Dark background for code areas */
+            position: relative; /* For absolutely positioned line numbers and vertical resizer */
+        }
+
+        .code-panel {
+            border-right: 1px solid #3e4451; /* Separator between code panels */
+        }
+
+        .output-panel {
+            background-color: #fff; /* White background for output iframe */
+        }
+
+        /* Horizontal Splitter Bar (for column resizing) */
+        .splitter.horizontal {
+            width: 8px; /* Thickness of the splitter */
+            background-color: #3e4451; /* Color of the splitter */
+            cursor: ew-resize; /* East-West resize cursor */
+            flex-shrink: 0; /* Prevent splitter from shrinking */
+            position: relative;
+            z-index: 10; /* Ensure splitter is above panels */
+        }
+
+        .splitter.horizontal:hover {
+            background-color: #61afef; /* Highlight on hover */
+        }
+
+        /* Vertical Splitter Handle (for row resizing within a panel) */
+        .splitter.vertical {
+            height: 8px; /* Thickness of the splitter */
+            background-color: #3e4451; /* Color of the splitter */
+            cursor: ns-resize; /* North-South resize cursor */
+            flex-shrink: 0; /* Prevent splitter from shrinking */
+            width: 100%; /* Spans the full width of its parent panel */
+            border-top: 1px solid #282c34;
+            border-bottom: 1px solid #282c34;
+        }
+
+        .splitter.vertical:hover {
+            background-color: #61afef; /* Highlight on hover */
+        }
+
+
+        .code-panel-label, .output-panel-label {
+            color: #abb2bf; /* Light text for labels */
+            padding: 10px;
+            font-weight: bold;
+            background-color: #3e4451; /* Slightly lighter dark background for labels */
+            border-bottom: 1px solid #282c34;
+            text-align: center;
+            font-size: 0.9em;
+            user-select: none; /* Prevent text selection */
+            white-space: nowrap; /* Keep label on one line */
+            position: relative; /* For positioning the fullscreen button */
+        }
+        .output-panel-label {
+            background-color: #f0f0f0; /* Lighter background for output label */
+            color: #333; /* Dark text for output label */
+            border-bottom: 1px solid #ccc;
+        }
+
+        /* Styles for the preview fullscreen button in the output panel */
+        .preview-fullscreen-button {
+            position: absolute;
+            right: 10px; /* Adjust as needed */
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #98c379; /* Greenish button */
+            color: #282c34;
+            border: none;
+            padding: 5px 10px; /* Smaller padding for better fit */
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8em; /* Smaller font size */
+            transition: background-color 0.3s ease;
+        }
+
+        .preview-fullscreen-button:hover {
+            background-color: #7bb25c;
+        }
+
+
+        .code-editor-wrapper {
+            flex: 1; /* Wrapper takes remaining height */
+            overflow: auto; /* Allow scrolling for code content */
+            position: relative; /* For proper positioning of textarea and pre */
+            padding-left: 40px; /* Space for line numbers from Prism */
+            display: flex; /* Flex container for the textarea/pre combination */
+            flex-direction: column; /* To allow the height to be controlled */
+        }
+
+        /* The actual textarea for user input */
+        .code-input {
+            position: absolute; /* Position over the syntax-highlighted pre */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 10px 15px; /* Padding inside the textarea */
+            box-sizing: border-box;
+            border: none;
+            background: transparent; /* Make background transparent to see highlighted code */
+            color: transparent; /* Make text transparent so only highlighted text shows */
+            caret-color: #ffffff; /* Make cursor visible */
+            outline: none;
+            resize: none; /* Disable manual resize */
+            font-family: inherit; /* Inherit font from body */
+            font-size: 0.9em;
+            line-height: 1.4; /* Match line height with Prism */
+            z-index: 2; /* Ensure textarea is above highlighted code */
+            white-space: pre-wrap; /* Preserve whitespace and wrap lines */
+            word-wrap: break-word; /* Break long words */
+        }
+
+        /* The pre/code elements where Prism.js applies highlighting */
+        .code-highlight {
+            position: absolute; /* Position behind the textarea */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 10px 15px; /* Match textarea padding */
+            box-sizing: border-box;
+            overflow: hidden; /* Prevent inner scrollbars in this layer */
+            font-family: inherit;
+            font-size: 0.9em;
+            line-height: 1.4; /* Match textarea line height */
+            z-index: 1; /* Ensure it's below the textarea */
+        }
+
+        .code-highlight pre {
+            /* Prism.js applies styles to pre, override its defaults for layout */
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: transparent !important; /* Important for dark theme */
+            border-radius: 0 !important;
+            border: none !important;
+            height: 100%;
+            overflow: hidden; /* Hide scrollbars in pre, wrapper handles it */
+        }
+
+        /* Prism.js Line Numbers specific styling */
+        .line-numbers-rows {
+            border-right-color: #3e4451 !important; /* Match border color */
+            background-color: #21252b !important; /* Darker background for line numbers */
+        }
+        .line-numbers-rows > span:before {
+            color: #6a9955 !important; /* Greenish color for line numbers */
+        }
+
+
+        iframe {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: #fff;
+            box-sizing: border-box;
+            padding: 10px;
+            overflow: auto; /* Allow scrollbars inside iframe if content overflows */
+        }
+    </style>
+</head>
+<body>
+    <h1>Edit And Run</h1>
+
+    <div class="container">
+        <div class="code-panel html-panel" style="flex-grow: 1;">
+            <div class="code-panel-label">HTML</div>
+            <div class="code-editor-wrapper" id="htmlEditorWrapper">
+                <textarea id="htmlCode" class="code-input" spellcheck="false" wrap="off"></textarea>
+                <pre class="code-highlight language-html line-numbers" id="htmlHighlight"></pre>
+            </div>
+            <div class="splitter vertical" data-vertical-splitter-for="htmlEditorWrapper"></div>
+        </div>
+
+        <div class="splitter horizontal" data-splitter-index="0"></div>
+
+        <div class="code-panel css-panel" style="flex-grow: 1;">
+            <div class="code-panel-label">CSS</div>
+            <div class="code-editor-wrapper" id="cssEditorWrapper">
+                <textarea id="cssCode" class="code-input" spellcheck="false" wrap="off"></textarea>
+                <pre class="code-highlight language-css line-numbers" id="cssHighlight"></pre>
+            </div>
+            <div class="splitter vertical" data-vertical-splitter-for="cssEditorWrapper"></div>
+        </div>
+
+        <div class="splitter horizontal" data-splitter-index="1"></div>
+
+        <div class="code-panel js-panel" style="flex-grow: 1;">
+            <div class="code-panel-label">JavaScript</div>
+            <div class="code-editor-wrapper" id="jsEditorWrapper">
+                <textarea id="jsCode" class="code-input" spellcheck="false" wrap="off"></textarea>
+                <pre class="code-highlight language-javascript line-numbers" id="jsHighlight"></pre>
+            </div>
+            <div class="splitter vertical" data-vertical-splitter-for="jsEditorWrapper"></div>
+        </div>
+
+        <div class="output-panel" style="flex-grow: 2;"> <div class="output-panel-label">
+                Output
+                <button id="previewFullscreenBtn" class="preview-fullscreen-button">Fullscreen</button>
+            </div>
+            <iframe id="outputFrame"></iframe>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+
+    <script>
+        const htmlCode = document.getElementById('htmlCode');
+        const cssCode = document.getElementById('cssCode');
+        const jsCode = document.getElementById('jsCode');
+
+        const htmlHighlight = document.getElementById('htmlHighlight');
+        const cssHighlight = document.getElementById('cssHighlight');
+        const jsHighlight = document.getElementById('jsHighlight');
+
+        const outputFrame = document.getElementById('outputFrame');
+        const previewFullscreenBtn = document.getElementById('previewFullscreenBtn');
+
+        // --- Horizontal Panel Resizing Logic (existing) ---
+        const container = document.querySelector('.container');
+        const horizontalSplitters = document.querySelectorAll('.splitter.horizontal');
+
+        let isHorizontalResizing = false;
+        let currentHorizontalSplitter = null;
+        let prevHorizontalPanel = null;
+        let nextHorizontalPanel = null;
+        let startX = 0;
+        let prevHorizontalPanelFlexGrow = 0;
+        let nextHorizontalPanelFlexGrow = 0;
+
+        horizontalSplitters.forEach((splitter) => {
+            splitter.addEventListener('mousedown', (e) => {
+                isHorizontalResizing = true;
+                currentHorizontalSplitter = splitter;
+                startX = e.clientX;
+
+                let sibling = splitter.previousElementSibling;
+                while (sibling && !sibling.classList.contains('code-panel') && !sibling.classList.contains('output-panel')) {
+                    sibling = sibling.previousElementSibling;
+                }
+                prevHorizontalPanel = sibling;
+
+                sibling = splitter.nextElementSibling;
+                while (sibling && !sibling.classList.contains('code-panel') && !sibling.classList.contains('output-panel')) {
+                    sibling = sibling.nextElementSibling;
+                }
+                nextHorizontalPanel = sibling;
+
+                if (prevHorizontalPanel && nextHorizontalPanel) {
+                    prevHorizontalPanelFlexGrow = parseFloat(getComputedStyle(prevHorizontalPanel).flexGrow);
+                    nextHorizontalPanelFlexGrow = parseFloat(getComputedStyle(nextHorizontalPanel).flexGrow);
+
+                    document.body.style.cursor = 'ew-resize';
+                    document.body.style.userSelect = 'none';
+                }
+            });
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isHorizontalResizing || !prevHorizontalPanel || !nextHorizontalPanel) return;
+
+            const dx = e.clientX - startX;
+            const containerWidth = container.offsetWidth;
+
+            const totalFlexGrow = prevHorizontalPanelFlexGrow + nextHorizontalPanelFlexGrow;
+            const flexGrowUnit = containerWidth / totalFlexGrow;
+
+            let newPrevPanelFlexGrow = prevHorizontalPanelFlexGrow + (dx / flexGrowUnit);
+            let newNextPanelFlexGrow = nextHorizontalPanelFlexGrow - (dx / flexGrowUnit);
+
+            const minFlexGrow = 100 / flexGrowUnit; // Based on min-width 100px
+
+            newPrevPanelFlexGrow = Math.max(minFlexGrow, newPrevPanelFlexGrow);
+            newNextPanelFlexGrow = Math.max(minFlexGrow, newNextPanelFlexGrow);
+
+            const adjustedTotal = newPrevPanelFlexGrow + newNextPanelFlexGrow;
+            if (adjustedTotal !== totalFlexGrow) {
+                const diff = totalFlexGrow - adjustedTotal;
+                newPrevPanelFlexGrow += diff / 2;
+                newNextPanelFlexGrow += diff / 2;
+            }
+
+            prevHorizontalPanel.style.flexGrow = newPrevPanelFlexGrow;
+            nextHorizontalPanel.style.flexGrow = newNextPanelFlexGrow;
+
+            startX = e.clientX;
+        });
+
+        document.addEventListener('mouseup', () => {
+            isHorizontalResizing = false;
+            currentHorizontalSplitter = null;
+            prevHorizontalPanel = null;
+            nextHorizontalPanel = null;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        });
+
+        // --- Vertical Panel Resizing Logic (NEW) ---
+        const verticalSplitters = document.querySelectorAll('.splitter.vertical');
+
+        let isVerticalResizing = false;
+        let currentVerticalSplitter = null;
+        let targetEditorWrapper = null;
+        let startY = 0;
+        let startHeight = 0;
+
+        verticalSplitters.forEach((splitter) => {
+            splitter.addEventListener('mousedown', (e) => {
+                isVerticalResizing = true;
+                currentVerticalSplitter = splitter;
+                startY = e.clientY;
+
+                const targetId = splitter.dataset.verticalSplitterFor;
+                targetEditorWrapper = document.getElementById(targetId);
+
+                if (targetEditorWrapper) {
+                    startHeight = targetEditorWrapper.clientHeight;
+                    // Prevent text selection during drag
+                    document.body.style.userSelect = 'none';
+                    document.body.style.cursor = 'ns-resize';
+                }
+            });
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isVerticalResizing || !targetEditorWrapper) return;
+
+            const dy = e.clientY - startY;
+            let newHeight = startHeight + dy;
+
+            // Apply minimum height constraint (e.g., 50px)
+            newHeight = Math.max(50, newHeight);
+
+            targetEditorWrapper.style.height = `${newHeight}px`;
+            targetEditorWrapper.style.flexGrow = '0'; // Important to fix height, not flex-grow
+            targetEditorWrapper.style.flexShrink = '0'; // Important to fix height, not flex-shrink
+
+            // Since only one panel is being resized, the others naturally take up remaining space
+            // No complex flex-grow distribution needed here.
+
+            // Note: If you want to make other panels resize *proportionally* when one is dragged
+            // vertically, that would require a different flex setup (e.g., a grid layout or
+            // nested flex containers for each panel's internal structure).
+            // For now, this simply adjusts the specific editor's height.
+        });
+
+        document.addEventListener('mouseup', () => {
+            isVerticalResizing = false;
+            currentVerticalSplitter = null;
+            targetEditorWrapper = null;
+            document.body.style.cursor = ''; // Reset cursor
+            document.body.style.userSelect = ''; // Reset user-select
+        });
+
+
+        // --- Code Editor & Output Logic ---
+
+        function updateHighlight(textarea, highlightPre) {
+            highlightPre.textContent = textarea.value;
+            Prism.highlightElement(highlightPre);
+        }
+
+        function updateOutput() {
+            const html = htmlCode.value;
+            const css = `<style>${cssCode.value}</style>`;
+            const js = `<script>${jsCode.value}<\/script>`; // Escaped for parsing in HTML
+
+            const outputContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Output</title>
+                    ${css}
+                </head>
+                <body>
+                    ${html}
+                    ${js}
+                </body>
+                </html>
+            `;
+
+            outputFrame.contentWindow.document.open();
+            outputFrame.contentWindow.document.write(outputContent);
+            outputFrame.contentWindow.document.close();
+        }
+
+        // --- Preview Fullscreen Logic ---
+        previewFullscreenBtn.addEventListener('click', () => {
+            if (document.fullscreenElement === outputFrame) {
+                document.exitFullscreen();
+            } else {
+                if (outputFrame.requestFullscreen) {
+                    outputFrame.requestFullscreen().catch(err => {
+                        console.error(`Error attempting to enable fullscreen for preview: ${err.message} (${err.name})`);
+                    });
+                } else {
+                    alert("Your browser does not support fullscreen for iframes directly.");
+                }
+            }
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement === outputFrame) {
+                previewFullscreenBtn.textContent = 'Exit Fullscreen';
+            } else {
+                previewFullscreenBtn.textContent = 'Fullscreen';
+            }
+        });
+
+
+        // --- Event Listeners for Code Panels ---
+        htmlCode.addEventListener('input', () => { updateHighlight(htmlCode, htmlHighlight); updateOutput(); });
+        cssCode.addEventListener('input', () => { updateHighlight(cssCode, cssHighlight); updateOutput(); });
+        jsCode.addEventListener('input', () => { updateHighlight(jsCode, jsHighlight); updateOutput(); });
+
+        htmlCode.addEventListener('scroll', () => { htmlHighlight.scrollTop = htmlCode.scrollTop; });
+        cssCode.addEventListener('scroll', () => { cssHighlight.scrollTop = cssCode.scrollTop; });
+        jsCode.addEventListener('scroll', () => { jsHighlight.scrollTop = jsCode.scrollTop; });
+
+        // --- Initial Content and Setup ---
+        htmlCode.value = `\n<div id="app">\n  <h1>Hello, Resizable World!</h1>\n  <p>Drag the separators between the code panels!</p>\n  <button id="myButton">Click Me</button>\n</div>`;
+        cssCode.value = `/* Resizable CSS Panel */\nbody {\n  font-family: Arial, sans-serif;\n  background-color: #21252b;\n  color: #abb2bf;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  min-height: 100vh;\n}\n\n#app {\n  background-color: #3e4451;\n  padding: 30px;\n  border-radius: 8px;\n  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);\n  text-align: center;\n}\n\nh1 {\n  color: #61afef;\n}\n\np {\n  color: #c678dd;\n}\n\nbutton {\n  background-color: #98c379;\n  color: #282c34;\n  border: none;\n  padding: 10px 20px;\n  border-radius: 5px;\n  cursor: pointer;\n  transition: background-color 0.3s ease;\n}\n\nbutton:hover {\n  background-color: #7bb25c;\n}`;
+        jsCode.value = `// Resizable JavaScript Panel\nconst button = document.getElementById('myButton');\n\nif (button) {\n  button.addEventListener('click', () => {\n    alert('Button clicked! This alert is from the JS panel.');\n    console.log('Button was clicked at', new Date().toLocaleTimeString());\n  });\n}\n\nconsole.log('JavaScript is active!');`;
+
+        // Perform initial updates
+        updateHighlight(htmlCode, htmlHighlight);
+        updateHighlight(cssCode, cssHighlight);
+        updateHighlight(jsCode, jsHighlight);
+        updateOutput();
+    </script>
+</body>
+</html>
